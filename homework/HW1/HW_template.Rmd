@@ -1,0 +1,57 @@
+---
+title: "name of assignment"
+author: "student name"
+date: "date"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+header-includes:
+- \renewcommand*\familydefault{\sfdefault} %% this picks a sans serif font
+- \usepackage[T1]{fontenc}
+---
+```{r setup, echo=F}
+knitr::opts_chunk$set(cache = F)
+```
+
+**DELETE ANYTHING FROM THIS TEMPLATE BELOW THAT IS NOT PART OF YOUR SOLUTION.**
+
+(0) Instructions for installing tinytex for PDF rendering: [**https://yihui.org/tinytex/**](https://yihui.org/tinytex/)
+ 
+```{r, eval = F}
+install.packages('tinytex')
+tinytex::install_tinytex()
+```
+
+### I. First section
+
+(1) Answer to first question...using `mono-spaced font` to refer to a `function()` or other `code`...
+
+```{r}
+## code for first question...
+a <- 1:4
+a
+```
+
+(2) Here's a way to make a plot and include it
+
+```{r, fig.width=5, fig.height=4, out.height="3in"}
+par(mar = c(4, 4, 1, 1))
+plot(1:10)
+```
+
+(3) If you have a chunk of code that isn't working, you can set the chunk option `eval` to `FALSE` using `{r, eval = F}` to turn off that chunk and let the rest of your document render.
+
+```{r, eval = F}
+## This would throw an error if it ran
+"a" + 1
+```
+
+### II. Second section
+
+(4) The location of your `.Rmd` file is the "working directory". You will often want to do things like load data into R using `read.csv("data_file.csv")`, so it's a good idea to put your `.Rmd` file and all associated files in a smart place.
+
+(5) Make sure you read about `cache`-ing: https://bookdown.org/yihui/rmarkdown-cookbook/cache.html
+
+(6) If you can't get your R Markdown document to render as a PDF, you can try rendering it to HTML, and then "printing" the .html file to a PDF using any internet browser. 
+

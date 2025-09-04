@@ -1,0 +1,230 @@
+---
+title: "HW1: Manipulating and visualizing spatio-temporal data"
+author: "Fern Bromley"
+date: "September 12, 2025"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+header-includes:
+- \renewcommand*\familydefault{\sfdefault} %% this picks a sans serif font
+- \usepackage[T1]{fontenc}
+---
+
+```{r setup, echo=F}
+knitr::opts_chunk$set(class.source = 'number-lines', cache = T,
+                      tigris_use_cache = T, warning = T)
+```
+
+## I. Time [10 pts]
+
+Let's continue to look at the graffiti dataset from the city of San Diego. We'll focus on the records from 2023 onward.
+```{r graffiti}
+data_url <- url(paste0("https://seshat.datasd.org/get_it_done_graffiti/",
+                       "get_it_done_graffiti_requests_datasd.csv"))
+graffiti <- read.csv(data_url)
+graffiti$POSIX_requested <- 
+  strptime(graffiti$date_requested, format = "%Y-%m-%dT%T", tz = "America/Los_Angeles")
+start_date <- as.POSIXlt("2023-01-01 00:00:00", tz = "America/Los_Angeles")
+graffiti <- graffiti[graffiti$POSIX_requested >= start_date, ]
+```
+
+(@) [3 pts] What should be filled in for the `format` argument in line 5 to convert `graffiti$date_requested` to the `POSIXlt` vector `graffiti$POSIX_requested`? In your own words, explain what the code in lines 6 and 7 does.
+
+- Format should be "%Y-%m-%dT%T." Lines 6 and 7 specify a date-time in POSIX format and filter the dataframe to only include records on or after that date-time respectively.
+
+`POSIXlt` objects have a special method for the function `hist()` in `R`. The following line of code makes a histogram with bins defined by each month of the year.
+```{r, eval = F}
+hist(graffiti$POSIX_requested, breaks = "month", xlab = "time", main = "graffiti reports")
+abline(v = seq(as.POSIXlt("2023-01-01"), as.POSIXlt("2026-01-01"), "year"), 
+       col = "darkred", lwd = 2)
+```
+
+(@) [3 pts] Based on the histogram, do you think there appears to be any seasonality to the graffiti reports? If so, which months/seasons seem to have the highest rates of reporting? What do you see in the histogram that informs your answer?
+
+- There does not appear to be any seasonality to graffiti reports. While there are less than three full years of data, there are no months or sets of months that stand out as particularly high or low relative to other months among these years.
+
+(@) [4 pts] Run `?hist.POSIXt` in `R` to look at the help documentation for the `POSIX*t` method of `hist()`. What options are available for the `breaks` argument? **Provide executable code** (**PEC**) that makes a histogram of graffiti reports in time binned by week. Include your figure.
+
+- The 'breaks' argument is able to accept either a vector of x values at which to place breaks (for instance, specific days), or can place breaks at even intervals of a unit of time (for instance, every day, week, month, etc.)
+
+```{r}
+hist(graffiti$POSIX_requested, breaks = "week", xlab = "time", main = "graffiti reports")
+abline(v = seq(as.POSIXlt("2023-01-01"), as.POSIXlt("2026-01-01"), "year"), 
+       col = "darkred", lwd = 2)
+```
+
+## II. Simple features
+
+### A. Projections [10 pts]
+
+For many situations, working with spatial data in longitude and latitude works just fine (especially when the locations are near the equator). However, when we need to calculate distances between points, or areas of polygons, it is typically necessary to first *project* the spatial locations onto a flat coordinate system. 
+
+(@) [2 pts] Take a look at these examples of map projections: [https://xkcd.com/977/](https://xkcd.com/977/). Which one(s) is(are) your favorite(s)? Why? 
+
+- I like both the Robinson and plate carrée projections. At least visually, they seem to balance distortions of area and distance. I am also drawn to plate carrée because I like when lat and long can be x and y values. But, if I'm being honest, projections are confusing.
+
+Let's practice projecting data using the census tracts we looked at in class. We'll start by downloading those census tracts using the `tigris` package.
+```{r tracts, results = 'hide', message=FALSE}
+library(tigris)
+sd_tracts <- tracts(state = "CA", county = "San Diego")
+```
+We can check to see what the current coordinate system for the `SpatialPolygonDataFrame` is with the `st_crs()` function in `sf`.
+```{r, message=FALSE}
+library(sf)
+st_crs(sd_tracts)
+``` 
+
+(@) [2 pts] Use the resources at the homepage for the `sf` package (https://r-spatial.github.io/sf/#cheatsheet) to determine which function can be used to compute the areas of the census tracts in `sd_tracts`. **PEC** that creates a variable called `areas` with those values and verify the range of values match mine.
+```{r, eval = F}
+areas <- st_area(sd_tracts)
+range(areas)
+```
+
+- The areas we just calculated use a default method for spatially-referenced data in lat/long coordinates. Now we'll try re-projecting the census tracts for San Diego to a new coordinate reference system and see how the calculated areas change.
+
+(@) [3 pts] Use the `st_transform()` function to transform the census tract polygons to the [**Universal Transverse Mercator (UTM) projection for zone 11**](https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system#UTM_zone) (*hint: one way to specify the CRS for UTM zone 11 is* `+proj=utm +zone=11 +datum=WGS84 +units=m +no_defs +type=crs` *but there are others*). Call the new transformed object `sd_tracts_utm`. Compute the areas for each tract in the new coordinate system. How similar/different are the values to your answers from (5)?
+
+```{r}
+sd_tracts_utm <- st_transform(sd_tracts, crs = "epsg:32611") # i love UTM :)
+
+areas_utm <- st_area(sd_tracts_utm)
+range(areas_utm)
+```
+
+- With the tracts projected to a UTM coordinate system, the areas seem decently different, but only differ by less than 1%. This may be an acceptable error depending on the application of these data.
+
+(@) [3 pts] One of the columns of data provided by the City of San Diego in `sd_tracts` is labeled `ALAND` for area of land. Compare the values of `ALAND` to the ones we just calculated ourselves. How well do they agree? What do you think might be a reason for discrepancies between the areas?
+
+- Both of our calculated areas differ from those in the ALAND column, but to a similar degree. The census data managers may use an even different projection or make different assumptions in their computation of area (for example geodesic vs. euclidean distances for the tract boundaries).
+
+### B. Art density [15 pts]
+
+Now let's look at a new dataset from the City of San Diego. Line 16 downloads and reads into `R` the locations of artwork in the [Civic Art Collection](https://www.sdcivicartcollection.com/portals/civic-art-collection/). 
+```{r}
+art <- read.csv(url("https://seshat.datasd.org/civic_art_collection/public_art_locations_datasd.csv"))
+art_sf <- st_as_sf(art, coords = c("lng", "lat"))
+st_crs(art_sf) <- st_crs(sd_tracts)
+```
+
+(@) [2 pt] Fill in the blanks on line 17 to create the simple features object `art_sf` with an appropriate geometry defined by the locations in `art`. In your own words, explain what the code in line 18 does.
+
+- I supplied the art object to the first argument and the column names of the horizontal and vertical dimensions to the second.
+Code in line 18 takes art_sf, an object without a specified coordinate reference system, and tells R that it is in the same CRS as the census tracts.
+
+(@) [2 pt] How many total art installations are there in the collection? How many unique locations are there?
+
+```{r}
+length(unique(art$accession_number)) #871
+length(unique(art_sf$geometry)) #127
+```
+- There are 871 unique accession numbers- and presumably as many total art installations- at a total of 127 unique locations.
+
+Suppose we're working for the Chief Operating Officer of the City of San Diego, and we're trying to decide where we should spend money on a new mural. There are two candidate locations: College-Roland Library (longitude -117.0561, latitude 32.76941), and Mission Valley Library (-117.1269, 32.7793). One way to help us decide where to commission a new mural might be to look at how much access our residents have to art in their neighborhoods. If there is a scarcity of art in the vicinity of one of these libraries, that might be a good place to consider.
+
+First, we need to figure out how many pieces of art exist near these libraries. One way to summarize that information would be to figure out which census tract each library falls in, and then add up the number of art pieces in that census tract. We can use the function `st_intersection()` to do this.
+
+The code in lines 19--20 creates a simple features object called `CRL` that represents the location of the College-Rolando Library (CRL).
+```{r}
+CRL <- st_as_sf(x = data.frame(lng = -117.0561, lat = 32.76941), coords = c("lng", "lat"))
+st_crs(CRL) <- st_crs(sd_tracts) ## match the coordinate reference systems
+```
+
+(@) [1 pt] **PEC** that creates a simple features object called `MVL` that represents the location of the Mission Valley Library (MVL).
+```{r}
+MVL <- st_as_sf(x = data.frame(lng = -117.1269, lat = 32.7793), coords = c("lng", "lat"))
+st_crs(MVL) <- st_crs(sd_tracts)
+```
+
+The code in line 21 finds the row in `sd_tracts` that corresponds to the census tract containing the CRL. From the output, we can see that the name of the tract is `29.05`.
+```{r, warning=FALSE}
+st_intersection(CRL, sd_tracts)
+```
+
+(@) [1 pt] What is the name of the census tract containing the MVL?
+
+```{r, warning = F}
+st_intersection(MVL, sd_tracts)
+```
+- MVL is located in census tract 93.07.
+
+(@) [4 pts] Fill in the blanks below to create a new variable in the `sd_tracts` dataframe called `n_art` that gives the number of art installations in each census tract. Verify you get 12 installations in the tract with the College-Rolando Library. How many pieces of artwork are in the tract containing the MVL?
+```{r}
+sd_tracts$n_art <- lengths(st_intersects(sd_tracts, art_sf)) 
+sd_tracts$n_art[sd_tracts$NAME == "29.05"] # 12 art installations
+sd_tracts$n_art[sd_tracts$NAME == "93.07"] # 14 art installations
+```
+- There are 14 installations in the tract containing MVL.
+
+(@) [5 pts] Of CLR and MVL, which census tract has a lower density of artwork (i.e., less art per square meter)? Based on your answer to the previous question, which site do you think should be selected for the mural? What's another, *new* piece of information you think would be relevant to this decision?
+
+```{r}
+options(digits = 10)
+# 29.05 density:
+sd_tracts$n_art[sd_tracts$NAME == "29.05"]/sd_tracts$ALAND[sd_tracts$NAME == "29.05"]
+# 93.07 density:
+sd_tracts$n_art[sd_tracts$NAME == "93.07"]/sd_tracts$ALAND[sd_tracts$NAME == "93.07"]
+```
+
+- Census tract 93.07 has an order of magnitude lower density of art installations per square meter, which could make this area more ideal for future installations. The population density of each tract may be important; for instance, even if 93.07 has a lower art density based on land area, it could have more art installations per resident.
+
+## III. `ggmap` [5 pts]
+
+The package `ggmap` is an `R` package the facilitates the use of freely available map tiles from sources like [Google Maps](https://www.google.com/maps), and [Stadia Maps](https://stadiamaps.com/). These can provide great contextual visualizations for spatio-temporal data. Both of these maptile services require registration, but they both have free subscription levels that provide all the functionality we'll need. *Stadia does not require you to provide payment information.* Once you have registered, input your key using `ggmap::register_stadiamaps()`. Specifying `write = TRUE` will save your key for future instances of R. If you encounter problems with the CRAN distribution of `ggmap`, give the development version a try using `devtools::install_github("dkahle/ggmap")`.
+
+The following exercises are designed to help you learn the basic features of `ggmap`. The code in lines 24--25 loads the `ggmap` package, then defines the variable `bbox` based on a range of longitudes and latitudes. 
+
+```{r}
+library(ggmap)
+bbox <- c(left = -117.3, bottom = 32.5, right = -116.9, top = 33.1)
+```
+
+The code in line 26 uses the function `get_stadiamap()` to download tiles from Stadia. 
+
+```{r}
+art_map <- ggmap::get_stadiamap(bbox = bbox)
+```
+
+The code in lines 27--28 plots the artwork locations on a background of map tiles obtained from Stadia. The `ggmap` package uses the grammar of graphics syntax used in `ggplot2`. Don't worry too much if you're not familiar with it, you'll only need the basics for our class, and there are TONS of tutorials out there if you'd like to learn more. Try out the code below and take a look at the resulting map.
+
+```{r}
+ggmap::ggmap(art_map) + 
+  geom_point(aes(x = lng, y = lat), data = data.frame(art))
+```
+
+(@) [2 pts] The map shown is too zoomed out to be useful for this dataset. Try adjusting the `bbox` argument in the `get_stadiamap()` function until you have a better spatial scale. What are some good values for `bbox`?
+
+- I adjusted the `bbox` values to c(left = -117.3, bottom = 32.5, right = -116.9, top = 33.1).
+
+Stadia provides some alternative map tiles that can be very visually appealing, if not always strictly necessary. Use `?get_stadiamap` to see some possible values for the arguments `maptype` and `color`.
+
+(@) [3 pts] Explore some other combinations of `maptype` and `color`. Include your maps. Which one(s) is(are) your favorite(s)?
+
+- stamen_watercolor is definitely my favorite map type visually. I also like the default terrain since I tend to like topographic points of reference, and I like that this tile includes some component of urbanized vs. vegetated areas (I study plants.. surprise!).
+
+```{r}
+map1 <- ggmap::get_stadiamap(bbox = bbox, maptype = c("stamen_terrain_lines"),
+                      color = "bw", force = T)
+
+ggmap::ggmap(map1) + 
+  geom_point(aes(x = lng, y = lat), data = data.frame(art))+
+  theme_minimal()
+```
+
+```{r}
+map2 <- ggmap::get_stadiamap(bbox = bbox, maptype = c("stamen_watercolor"),
+                      color = "color", force = T)
+
+ggmap::ggmap(map2) + 
+  geom_point(aes(x = lng, y = lat), data = data.frame(art))+
+  theme_minimal()
+```
+```{r}
+map3 <- ggmap::get_stadiamap(bbox = bbox, maptype = c("stamen_terrain"),
+                      color = "color", force = T)
+
+ggmap::ggmap(map3) + 
+  geom_point(aes(x = lng, y = lat), data = data.frame(art))+
+  theme_minimal()
+```
+There are LOTS of great tutorials out there on the `ggmap` package. If you find one that resonates with you, let me know so I can post it on D2L for others.
