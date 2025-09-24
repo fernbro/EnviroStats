@@ -1,0 +1,94 @@
+---
+title: 'HW2: Continuous, fixed spatial index'
+author: "Fern Bromley"
+date: "**October 3, 2025**"
+output:
+  pdf_document
+header-includes:
+- \renewcommand*\familydefault{\sfdefault} %% this picks a sans serif font
+- \usepackage[T1]{fontenc}
+---
+
+## Homework Guidelines
+
+***Please submit your answers on Gradescope as a PDF with pages matched to question answers.***
+
+One way to prepare your solutions to this homework is with R Markdown, which provides a way to include mathematical notation, text, code, and figures in a single document. A template `.Rmd` file is available through D2L. 
+
+Make sure all solutions are clearly labeled, and **please utilize the question pairing tool on Gradescope**. You are encouraged to work together, but your solutions, code, plots, and wording should always be your own. Come and see me during office hours or schedule an appointment when you get stuck and can't get unstuck.
+
+## I. Mathematical [6 pts]
+
+(@) [6 pts] From Section 6.6 in ZVH, do **either** exercise 5. or 9. For 9., three covariance functions from each table (6.1 and 6.2) is sufficient.
+
+    *5. Consider an isotropic second-order stationary geostatistical process in $\mathbb{R}^d$ with covariance function 
+$$C(r; \sigma^2, \kappa) = \begin{cases} \sigma^2 &\mathrm{if} \; r = 0, \\ \sigma^2\kappa &\mathrm{if} \; r \neq 0, \end{cases}$$
+where $\sigma^2> 0$. Show that $\kappa$ cannot be negative. (Hint: Consider the positive-definiteness property (6.1), with $a_i = 1$ for every site $i$.)*
+
+    *9. Graph the correlation functions listed in Tables 6.1 and 6.2 that are not displayed in Figures 6.2 and 6.3, for two or more choices of each parameter. Use distance increments of 0.1 ranging from 0 to 4, and pick appropriate parameter values so that the autocorrelation approaches 0 by distance 4.*
+    
+- **Exercise 5:** A valid, parametric covariance function must be positive definite (i.e., )
+
+## II. Tucson Water [28 pts]
+
+The Arizona Department Of Environmental Quality (ADEQ) monitors ground water for a large number of potentially hazardous chemicals at sites around the state. One such chemical is [**1,4-Dioxane**](https://en.wikipedia.org/wiki/1%2C4-Dioxane), which has a number of industrial uses, but is also irritating to eyes and respiratory systems, and is a possible carcinogen. The data in `1_4_dioxane.csv` were gathered from [**https://www.waterqualitydata.us/**](https://www.waterqualitydata.us/) and represent concentrations of the chemical 1,4-Dioxane in ground water near Tucson as measured in micrograms per liter (`ResultMeasureValue`). Each measurement is associated with a date (`AnalysisStartDate`) and the coordinates of the monitoring site (`Longitude`/`LatitudeMeasure`). In addition, a binary variable indicating whether or not the monitoring site is located within the boundary of Tucson International Airport (TIA) is also included (`airport`). 
+
+(@) [2 pts] Create a map like the one shown (see Gradescope PDF) to visualize the spatial arrangement of log-dioxane concentrations. Be sure to choose colors appropriate for the measured variable. **Provide executable code (PEC)**.
+
+```{r}
+library(sf)
+diox <- read.csv("1_4_dioxane.csv")
+diox$log_diox <- log(diox$ResultMeasureValue)
+# diox_sf <- st_as_sf(diox, coords = c("LongitudeMeasure", "LatitudeMeasure"),
+#                     crs = "epsg:4269")
+# diox_sf$log_conc <- log(diox_sf$ResultMeasureValue)
+
+library(ggmap)
+
+# bbox <- st_bbox(diox_sf, crs = "epsg:4269")
+bbox <- c(left = -111, bottom = 32.08, right = -110.93, top = 32.18)
+diox_map <- ggmap::get_stadiamap(bbox = bbox, zoom = 15)
+
+library(viridisLite)
+
+ggmap(diox_map)+
+  geom_point(data = diox, 
+             aes(x = LongitudeMeasure, y = LatitudeMeasure,
+                 color = log_diox))+
+  scale_color_gradientn(colors = viridis(256, option = "B", direction = -1))
+```
+
+
+(@) [3 pts] Make a scatterplot showing log-dioxane as a function of the date each measurement was taken. Does your plot suggest time is related to concentrations of dioxane? Make a figure with two boxplots of log-dioxane grouped by whether or not sites are located at the airport or not. Does your figure suggest that sites at the airport have meaningfully different concentrations than other sites?
+
+```{r}
+ggplot(diox)+
+  geom_point(aes(x = AnalysisStartDate, y = log_diox))
+```
+```{r}
+ggplot(diox)+
+  geom_boxplot(aes(x = airport, y = log_diox))
+```
+
+
+(@) [3 pts] Transform the dioxane data to a new projection (coordinate reference system) corresponding to UTM zone 12N. **(PEC)**. Make an empirical semivariogram for the log-concentration of dioxane after accounting for possible linear effects of date and whether a site is at the airport or not. Give a rough estimate for the size of the nugget effect.
+
+(@) [3 pts] Fit a spatial linear regression model using restricted maximum likelihood (REML) to log-concentrations of dioxane as a linear function of measurement date and whether a site is located at TIA. Use the Matérn parametric family of covariance functions. Report the estimated nugget, partial sill, and range parameters. Given your semivariogram from the previous problem, do the parameter estimates make sense to you?
+
+(@) [3 pts] Fit the same spatial linear regression model to the observations using the two-stage semivariogram + weighted least squares (SV-WLS) approach. Report the estimated covariance function parameters. Which estimation method, REML or SV-WLS, do you think yields the most reasonable covariance function parameters?
+
+(@) [3 pts] Use leave-one-out cross validation to compare the predictive performance of each fitted model (REML and SV-WLS). Which model is associated with the smallest mean squared prediction error?
+
+(@) [2 pts] Create diagnostic plots to visually assess how reasonable the assumption of marginal normality is for each fitted model. Interpret your plots.
+
+(@) [3 pts] Report and interpret the REML-estimated fixed effects of date and whether or not a site is at TIA. Do the signs match what you'd expect? Why/why not?
+
+(@) [2 pts] Use the REML-fitted model to create a 95% confidence interval for the expected log-concentration of dioxane in groundwater beneath the intersection of Drexel Rd. and 6th Ave. (32.1485, -110.9680) on May 28, 2007.
+
+(@) [4 pts] Use a basis function approach to model the log-concentration of dioxane while accounting for the possible effects of date and whether or not a site is located at TIA. Use your fitted model to create another 95% confidence interval for the log-concentration of dioxane at Drexel Rd. and 6th Ave. on the same date. Which method produced the narrower confidence interval?
+
+## III. Canada Lynx [6 pts]
+
+(@) [3 pts] Obtain the centered and scaled locations of two Canada lynx from the supplementary materials of [**Buderman et al. (2016)**](https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12465). Use the functionality of the `mgcv` package to fit independent GAM models to each coordinate of the bivariate location measurements of individual BC03F03. **Use cubic regression splines**, and experiment with the dimension of the basis (i.e., number of basis functions) to find a fit that looks good to you. **PEC**.
+
+(@) [3 pts] Make two plots in the spirit of Figure 1(b) from Buderman et al. (2016) using your fitted models. Where in the two plots do you see the biggest discrepancies between your fit and the one from Buderman et al. (2016)?
