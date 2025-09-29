@@ -9,14 +9,6 @@ header-includes:
 - \usepackage[T1]{fontenc}
 ---
 
-## Homework Guidelines
-
-***Please submit your answers on Gradescope as a PDF with pages matched to question answers.***
-
-One way to prepare your solutions to this homework is with R Markdown, which provides a way to include mathematical notation, text, code, and figures in a single document. A template `.Rmd` file is available through D2L. 
-
-Make sure all solutions are clearly labeled, and **please utilize the question pairing tool on Gradescope**. You are encouraged to work together, but your solutions, code, plots, and wording should always be your own. Come and see me during office hours or schedule an appointment when you get stuck and can't get unstuck.
-
 ## I. Mathematical [6 pts]
 
 (@) [6 pts] From Section 6.6 in ZVH, do **either** exercise 5. or 9. For 9., three covariance functions from each table (6.1 and 6.2) is sufficient.
@@ -25,9 +17,13 @@ Make sure all solutions are clearly labeled, and **please utilize the question p
 $$C(r; \sigma^2, \kappa) = \begin{cases} \sigma^2 &\mathrm{if} \; r = 0, \\ \sigma^2\kappa &\mathrm{if} \; r \neq 0, \end{cases}$$
 where $\sigma^2> 0$. Show that $\kappa$ cannot be negative. (Hint: Consider the positive-definiteness property (6.1), with $a_i = 1$ for every site $i$.)*
 
-    *9. Graph the correlation functions listed in Tables 6.1 and 6.2 that are not displayed in Figures 6.2 and 6.3, for two or more choices of each parameter. Use distance increments of 0.1 ranging from 0 to 4, and pick appropriate parameter values so that the autocorrelation approaches 0 by distance 4.*
-    
+
 - **Exercise 5:** A valid, parametric covariance function must be positive definite (i.e., )
+
+r = intersite distance; sigma2 = variance; variance times some constant if the site is further away.
+If $\sigma^2> 0$, and the value of C must be $\> 0$, then $\kappa$ must be > 0.
+
+For the covariance function above to be valid, 
 
 ## II. Tucson Water [28 pts]
 
@@ -39,13 +35,9 @@ The Arizona Department Of Environmental Quality (ADEQ) monitors ground water for
 library(sf)
 diox <- read.csv("1_4_dioxane.csv")
 diox$log_diox <- log(diox$ResultMeasureValue)
-# diox_sf <- st_as_sf(diox, coords = c("LongitudeMeasure", "LatitudeMeasure"),
-#                     crs = "epsg:4269")
-# diox_sf$log_conc <- log(diox_sf$ResultMeasureValue)
 
 library(ggmap)
 
-# bbox <- st_bbox(diox_sf, crs = "epsg:4269")
 bbox <- c(left = -111, bottom = 32.08, right = -110.93, top = 32.18)
 diox_map <- ggmap::get_stadiamap(bbox = bbox, zoom = 15)
 
@@ -62,33 +54,136 @@ ggmap(diox_map)+
 (@) [3 pts] Make a scatterplot showing log-dioxane as a function of the date each measurement was taken. Does your plot suggest time is related to concentrations of dioxane? Make a figure with two boxplots of log-dioxane grouped by whether or not sites are located at the airport or not. Does your figure suggest that sites at the airport have meaningfully different concentrations than other sites?
 
 ```{r}
-ggplot(diox)+
-  geom_point(aes(x = AnalysisStartDate, y = log_diox))
+ggplot(diox, aes(x = as.POSIXct(AnalysisStartDate), y = log_diox))+
+  geom_point()
 ```
+It would not appear from the scatterplot that the log dioxane concentration is following a temporal pattern.
+
 ```{r}
 ggplot(diox)+
   geom_boxplot(aes(x = airport, y = log_diox))
 ```
-
+The box plot does suggest that the airport could have a higher mean log dioxane concentration.
 
 (@) [3 pts] Transform the dioxane data to a new projection (coordinate reference system) corresponding to UTM zone 12N. **(PEC)**. Make an empirical semivariogram for the log-concentration of dioxane after accounting for possible linear effects of date and whether a site is at the airport or not. Give a rough estimate for the size of the nugget effect.
 
+```{r}
+diox_sf <- st_as_sf(diox, coords = c("LongitudeMeasure", "LatitudeMeasure"),
+                    crs = "epsg:4269")
+diox_12n <- st_transform(diox_sf, crs = "epsg:32612")
+```
+
+```{r}
+# ok now we account for linear effect of date and the airport location:
+library(spmodel)
+plot(esv(log_diox ~ as.POSIXct(AnalysisStartDate) + airport, diox_12n))
+```
+The nugget effect estimated from the empirical semivariogram appears to be around 0.4 - 0.5.
+
+
 (@) [3 pts] Fit a spatial linear regression model using restricted maximum likelihood (REML) to log-concentrations of dioxane as a linear function of measurement date and whether a site is located at TIA. Use the Matérn parametric family of covariance functions. Report the estimated nugget, partial sill, and range parameters. Given your semivariogram from the previous problem, do the parameter estimates make sense to you?
+
+```{r}
+reml_mod <- splm(log_diox ~ as.POSIXct(AnalysisStartDate) + airport, 
+                 data = diox_12n, estmethod = "reml",
+                 spcov_type = "matern")
+reml_mod$coefficients
+```
+
 
 (@) [3 pts] Fit the same spatial linear regression model to the observations using the two-stage semivariogram + weighted least squares (SV-WLS) approach. Report the estimated covariance function parameters. Which estimation method, REML or SV-WLS, do you think yields the most reasonable covariance function parameters?
 
+```{r}
+sv_wls_mod <- splm(log_diox ~ as.POSIXct(AnalysisStartDate) + airport, 
+                 data = diox_12n, estmethod = "sv-wls",
+                 spcov_type = "matern")
+sv_wls_mod$coefficients
+```
+SV-WLS yielded more reasonable covariance function parameters.
+
 (@) [3 pts] Use leave-one-out cross validation to compare the predictive performance of each fitted model (REML and SV-WLS). Which model is associated with the smallest mean squared prediction error?
+
+```{r}
+rbind(c("reml", spmodel::loocv(reml_mod)), c("sv-wls", spmodel::loocv(sv_wls_mod)))
+```
+
+The first model using REML estimation had a lower MSPE.
 
 (@) [2 pts] Create diagnostic plots to visually assess how reasonable the assumption of marginal normality is for each fitted model. Interpret your plots.
 
+```{r}
+plot(reml_mod, 1)
+plot(esv(.std.resid ~ 1, augment(reml_mod)))
+# hist(reml_mod$residuals$response, breaks = 100)
+
+plot(sv_wls_mod, 1)
+plot(esv(.std.resid ~ 1, augment(sv_wls_mod))) # adds model diagnostics as vars to the data (basically)
+# hist(sv_wls_mod$residuals$response, breaks = 100)
+
+```
+For both models, the residuals appear normally distributed, and the standardized residuals do not show any spatial autocorrelation.
+
 (@) [3 pts] Report and interpret the REML-estimated fixed effects of date and whether or not a site is at TIA. Do the signs match what you'd expect? Why/why not?
+
+```{r}
+summary(reml_mod)
+```
+The fixed effects estimates from the REML-fitted models suggest that there was a very small effect of time, such that as time passed, log dioxane concentrations decreased. Additionally, there was an effect of whether the site is at the airport or not, such that sites on the airport tended to have a lower log dioxane concentration. The negative coefficient for the effect of time makes sense if there are no longer inputs of dioxane into the environment and it is naturally being transported/decomposed, or if there are active dioxane cleanup efforts. I was surprised that sites at the airport were likely to have lower dioxane concentrations considering that it is an industrial chemical. However, perhaps the non-airport sites were also industrial as well.
 
 (@) [2 pts] Use the REML-fitted model to create a 95% confidence interval for the expected log-concentration of dioxane in groundwater beneath the intersection of Drexel Rd. and 6th Ave. (32.1485, -110.9680) on May 28, 2007.
 
+```{r}
+drexel <- data.frame(AnalysisStartDate = "2007-05-28", airport = F, LatitudeMeasure = 32.1485, LongitudeMeasure = -110.9680)
+drexel_sf <- st_as_sf(drexel, crs = "epsg:32612", coords = c("LatitudeMeasure", "LongitudeMeasure"))
+
+pred_diox <- predict(reml_mod, newdata = drexel_sf, se.fit = T) ; pred_diox
+z <- qnorm(1 - (0.05/2))
+pred_diox <- predict(reml_mod, newdata = drexel_sf, interval = "confidence"); pred_diox
+```
+
 (@) [4 pts] Use a basis function approach to model the log-concentration of dioxane while accounting for the possible effects of date and whether or not a site is located at TIA. Use your fitted model to create another 95% confidence interval for the log-concentration of dioxane at Drexel Rd. and 6th Ave. on the same date. Which method produced the narrower confidence interval?
+
+```{r}
+library(mgcv)
+
+gam_mod <- gam(log_diox ~ as.POSIXct(AnalysisStartDate) + airport + s(LongitudeMeasure, LatitudeMeasure), 
+               data = diox)
+plot(gam_mod)
+
+pred_gam <- predict.gam(gam_mod, newdata = drexel, se.fit = T) ; pred_gam
+```
 
 ## III. Canada Lynx [6 pts]
 
 (@) [3 pts] Obtain the centered and scaled locations of two Canada lynx from the supplementary materials of [**Buderman et al. (2016)**](https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12465). Use the functionality of the `mgcv` package to fit independent GAM models to each coordinate of the bivariate location measurements of individual BC03F03. **Use cubic regression splines**, and experiment with the dimension of the basis (i.e., number of basis functions) to find a fit that looks good to you. **PEC**.
 
+```{r}
+lynx <- read.csv("lynxdata.csv")
+lynx <- subset(lynx, lynx$Individual == "BC03F03")
+lynx$Date <- as.numeric(as.POSIXct(lynx$Date, format = "%m/%d/%Y"))
+
+library(mgcv)
+gam_lat <- gam(Latitude ~ s(Date, bs = "cr", k = 20), data = lynx)
+plot(gam_lat)
+
+gam_lon <- gam(Longitude ~ s(Date, bs = "cr", k = 30), data = lynx)
+plot(gam_lon)
+```
+
+
 (@) [3 pts] Make two plots in the spirit of Figure 1(b) from Buderman et al. (2016) using your fitted models. Where in the two plots do you see the biggest discrepancies between your fit and the one from Buderman et al. (2016)?
+
+```{r}
+ggplot(lynx, aes(x = as.POSIXct(Date), y = Longitude))+
+  geom_point(aes(color = Data.Type))+
+  geom_line(aes(y = predict(gam_lon)))+
+  theme_light()+
+  labs(color = "Accuracy/data class")
+
+ggplot(lynx, aes(x = as.POSIXct(Date), y = Latitude))+
+  geom_point(aes(color = Data.Type))+
+  geom_line(aes(y = predict(gam_lat)))+
+  theme_light()+
+  labs(color = "Accuracy/data class")
+```
+
