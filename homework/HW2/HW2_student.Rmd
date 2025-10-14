@@ -13,17 +13,84 @@ header-includes:
 
 (@) [6 pts] From Section 6.6 in ZVH, do **either** exercise 5. or 9. For 9., three covariance functions from each table (6.1 and 6.2) is sufficient.
 
-    *5. Consider an isotropic second-order stationary geostatistical process in $\mathbb{R}^d$ with covariance function 
-$$C(r; \sigma^2, \kappa) = \begin{cases} \sigma^2 &\mathrm{if} \; r = 0, \\ \sigma^2\kappa &\mathrm{if} \; r \neq 0, \end{cases}$$
-where $\sigma^2> 0$. Show that $\kappa$ cannot be negative. (Hint: Consider the positive-definiteness property (6.1), with $a_i = 1$ for every site $i$.)*
+Answering Exercise #9:
 
+```{r}
+# set up distances; use alpha = 4 as default since that should just be the range.... right?!
+dists <- seq(0, 4, by = 0.1)
+alpha <- 4
+```
 
-- **Exercise 5:** A valid, parametric covariance function must be positive definite (i.e., )
+```{r}
+fun1 <- 1 - (15*dists/(8*alpha)) + (5*(dists^3)/(4*(alpha^3))) - (3*(dists^5)/(8*(alpha^5)))
+plot(dists, fun1, main = "Pentaspherical", ylab = "rho", xlab = "distance")
+```
 
-r = intersite distance; sigma2 = variance; variance times some constant if the site is further away.
-If $\sigma^2> 0$, and the value of C must be $\> 0$, then $\kappa$ must be > 0.
+```{r}
+fun2 <- 1 - (7*(dists^2)/(alpha^2)) + (35*(dists^3)/(4*(alpha^3))) - (7*(dists^5)/(2*(alpha^5))) + (3*(dists^7)/(4*(alpha^7)))
+plot(dists, fun2, main = "Cubic", ylab = "rho", xlab = "distance")
+```
+```{r}
+fun3 <- (2/pi)*(acos(dists/alpha) - ((dists/alpha)*sqrt(1-((dists/alpha)^2))) - ((2*dists/(3*alpha))*((1-((dists/alpha)^2))^(3/2))))
+plot(dists, fun3, main = "Tetraspherical")
+```
+```{r}
+# generalized cauchy
 
-For the covariance function above to be valid, 
+theta <- 1
+phi = 3
+
+fun4 <- (1+((dists/alpha)^theta))^(-phi)
+plot(dists, fun4, main = "Generalized Cauchy (theta = 1, phi = 3)", 
+     xlab = "distance", ylab = "rho")
+```
+```{r}
+# gen cauchy 
+theta_a <- 0.5
+phi_a <-  3
+alpha4 <- 2
+
+fun4_a <- (1+((dists/alpha)^theta_a))^(-phi_a)
+
+plot(dists, fun4_a, main = "Generalized Cauchy (theta = 0.5, phi = 3)", 
+     xlab = "distance", ylab = "rho")
+
+theta_b <- 2
+phi_b = 4
+
+fun4_b <- (1+((dists/alpha)^theta_b))^(-phi_b)
+
+plot(dists, fun4_b, main = "Generalized Cauchy (theta = 2, phi = 4)", 
+     xlab = "distance", ylab = "rho")
+```
+
+```{r}
+# gravity because i like the name :)
+
+alpha_5 <- 0.1
+fun5 <- (1+((dists/alpha_5)^2))^(-1/2)
+
+alpha_5a <- 0.3
+fun5a <- (1+((dists/alpha_5a)^2))^(-1/2)
+
+plot(dists, fun5, main = "Gravity (alpha = 0.1)",
+          xlab = "distance", ylab = "rho")
+plot(dists, fun5a, main = "Gravity (alpha = 0.3)",
+     xlab = "distance", ylab = "rho")
+```
+```{r}
+# radon transform of exponential, order 4
+alpha_6 <- 0.5
+alpha_6a <- 0.1
+
+fun6 <- (1+(dists/alpha_6) + ((1/3)*((dists/alpha_6)^2)))*exp(-dists/alpha_6)
+fun6a <- (1+(dists/alpha_6a) + ((1/3)*((dists/alpha_6a)^2)))*exp(-dists/alpha_6a)
+
+plot(dists, fun6, main = "Radon transform (alpha = 0.5)",
+     xlab = "distance", ylab = "rho")
+plot(dists, fun6a, main = "Radon transform (alpha = 0.1)",
+     xlab = "distance", ylab = "rho")
+```
 
 ## II. Tucson Water [28 pts]
 
@@ -35,11 +102,10 @@ The Arizona Department Of Environmental Quality (ADEQ) monitors ground water for
 library(sf)
 diox <- read.csv("1_4_dioxane.csv")
 diox$log_diox <- log(diox$ResultMeasureValue)
-
-library(ggmap)
-
 bbox <- c(left = -111, bottom = 32.08, right = -110.93, top = 32.18)
 diox_map <- ggmap::get_stadiamap(bbox = bbox, zoom = 15)
+
+library(ggmap)
 
 library(viridisLite)
 
@@ -57,7 +123,7 @@ ggmap(diox_map)+
 ggplot(diox, aes(x = as.POSIXct(AnalysisStartDate), y = log_diox))+
   geom_point()
 ```
-It would not appear from the scatterplot that the log dioxane concentration is following a temporal pattern.
+It would not appear from the scatterplot that the log dioxane concentration is following an interannual temporal pattern, but there might be some seasonality.
 
 ```{r}
 ggplot(diox)+
@@ -104,7 +170,8 @@ SV-WLS yielded more reasonable covariance function parameters.
 (@) [3 pts] Use leave-one-out cross validation to compare the predictive performance of each fitted model (REML and SV-WLS). Which model is associated with the smallest mean squared prediction error?
 
 ```{r}
-rbind(c("reml", spmodel::loocv(reml_mod)), c("sv-wls", spmodel::loocv(sv_wls_mod)))
+rbind(c("reml", spmodel::loocv(reml_mod)), 
+      c("sv-wls", spmodel::loocv(sv_wls_mod)))
 ```
 
 The first model using REML estimation had a lower MSPE.
@@ -114,11 +181,9 @@ The first model using REML estimation had a lower MSPE.
 ```{r}
 plot(reml_mod, 1)
 plot(esv(.std.resid ~ 1, augment(reml_mod)))
-# hist(reml_mod$residuals$response, breaks = 100)
 
 plot(sv_wls_mod, 1)
-plot(esv(.std.resid ~ 1, augment(sv_wls_mod))) # adds model diagnostics as vars to the data (basically)
-# hist(sv_wls_mod$residuals$response, breaks = 100)
+plot(esv(.std.resid ~ 1, augment(sv_wls_mod)))
 
 ```
 For both models, the residuals appear normally distributed, and the standardized residuals do not show any spatial autocorrelation.
@@ -128,30 +193,33 @@ For both models, the residuals appear normally distributed, and the standardized
 ```{r}
 summary(reml_mod)
 ```
-The fixed effects estimates from the REML-fitted models suggest that there was a very small effect of time, such that as time passed, log dioxane concentrations decreased. Additionally, there was an effect of whether the site is at the airport or not, such that sites on the airport tended to have a lower log dioxane concentration. The negative coefficient for the effect of time makes sense if there are no longer inputs of dioxane into the environment and it is naturally being transported/decomposed, or if there are active dioxane cleanup efforts. I was surprised that sites at the airport were likely to have lower dioxane concentrations considering that it is an industrial chemical. However, perhaps the non-airport sites were also industrial as well.
+The fixed effects estimates from the REML-fitted models suggest that there was a very small effect of time, such that as time passed, log dioxane concentrations decreased. Additionally, there was an effect of whether the site is at the airport or not, such that sites on the airport tended to have a lower log dioxane concentration. The negative coefficient for the effect of time makes sense if there are no longer inputs of dioxane into the environment and it is naturally being transported/decomposed, or if there are active dioxane cleanup efforts. I was surprised that sites at the airport were likely to have lower dioxane concentrations since it is an industrial chemical. However, perhaps the non-airport sites were also industrial and/or are downstream of the airport.
 
 (@) [2 pts] Use the REML-fitted model to create a 95% confidence interval for the expected log-concentration of dioxane in groundwater beneath the intersection of Drexel Rd. and 6th Ave. (32.1485, -110.9680) on May 28, 2007.
 
 ```{r}
-drexel <- data.frame(AnalysisStartDate = "2007-05-28", airport = F, LatitudeMeasure = 32.1485, LongitudeMeasure = -110.9680)
-drexel_sf <- st_as_sf(drexel, crs = "epsg:32612", coords = c("LatitudeMeasure", "LongitudeMeasure"))
+drexel <- data.frame(AnalysisStartDate = "2007-05-28", airport = F, 
+                     LatitudeMeasure = 32.1485, LongitudeMeasure = -110.9680)
+drexel_sf <- st_as_sf(drexel, crs = "epsg:32612", 
+                      coords = c("LatitudeMeasure", "LongitudeMeasure"))
 
-pred_diox <- predict(reml_mod, newdata = drexel_sf, se.fit = T) ; pred_diox
-z <- qnorm(1 - (0.05/2))
-pred_diox <- predict(reml_mod, newdata = drexel_sf, interval = "confidence"); pred_diox
+pred_diox <- predict(reml_mod, newdata = drexel_sf, 
+                     interval = "confidence", se.fit = T) ; pred_diox
 ```
-
 (@) [4 pts] Use a basis function approach to model the log-concentration of dioxane while accounting for the possible effects of date and whether or not a site is located at TIA. Use your fitted model to create another 95% confidence interval for the log-concentration of dioxane at Drexel Rd. and 6th Ave. on the same date. Which method produced the narrower confidence interval?
 
 ```{r}
 library(mgcv)
 
-gam_mod <- gam(log_diox ~ as.POSIXct(AnalysisStartDate) + airport + s(LongitudeMeasure, LatitudeMeasure), 
-               data = diox)
-plot(gam_mod)
+gam_mod <- gam(log_diox ~ as.POSIXct(AnalysisStartDate) + airport 
+               + s(LongitudeMeasure, LatitudeMeasure), data = diox)
+summary(gam_mod)
+# plot(gam_mod)
 
-pred_gam <- predict.gam(gam_mod, newdata = drexel, se.fit = T) ; pred_gam
+pred_gam <- predict.gam(gam_mod, newdata = drexel, interval = "confidence", 
+                        se.fit = T) ; pred_gam
 ```
+The GAM method produced a narrower confidence interval due to estimating a smaller standard error.
 
 ## III. Canada Lynx [6 pts]
 
@@ -164,12 +232,12 @@ lynx$Date <- as.numeric(as.POSIXct(lynx$Date, format = "%m/%d/%Y"))
 
 library(mgcv)
 gam_lat <- gam(Latitude ~ s(Date, bs = "cr", k = 20), data = lynx)
-plot(gam_lat)
+# plot(gam_lat)
+# gam.check(gam_lat)
 
 gam_lon <- gam(Longitude ~ s(Date, bs = "cr", k = 30), data = lynx)
-plot(gam_lon)
+# gam.check(gam_lon)
 ```
-
 
 (@) [3 pts] Make two plots in the spirit of Figure 1(b) from Buderman et al. (2016) using your fitted models. Where in the two plots do you see the biggest discrepancies between your fit and the one from Buderman et al. (2016)?
 
@@ -186,4 +254,4 @@ ggplot(lynx, aes(x = as.POSIXct(Date), y = Latitude))+
   theme_light()+
   labs(color = "Accuracy/data class")
 ```
-
+I feel like my plots look less smooth than those in Buderman et al., but the overall patterns (where and how the line curves) are relatively conserved. For the GAM of latitude, there are some differences in the curvature after 2004, particularly when the location is at its most northern and it turns back south.
