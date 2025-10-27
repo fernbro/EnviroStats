@@ -1,7 +1,7 @@
 ---
 title: 'HW3: Discrete, fixed spatial index'
 author: "Fern Bromley"
-date: "**DUE: 10/17 11:59pm**"
+date: "October 17, 2025"
 output:
   pdf_document
 header-includes:
@@ -11,17 +11,13 @@ header-includes:
 
 ```{r setup, echo=F}
 knitr::opts_chunk$set(class.source = 'number-lines', cache = T,
-                      tigris_use_cache = T, warning = F, results = 'hide', fig.show = 'hide',
-                      echo = F, message = F)
+                      tigris_use_cache = T, warning = F, results = 'hide', fig.show = 'show',
+                      echo = T, message = F)
 ```
 
 ### I. Mathematical [6 pts]
 
-(@) [6 pts] Do *either* of the following:
-
-    (Option 1) Let $\boldsymbol{x}$ be a mean-zero multivariate normal random vector of length $n$ with precision matrix $\mathbf{Q} = \boldsymbol\Sigma^{-1}$ such that $\boldsymbol{x} \sim \mathrm{N}(\boldsymbol{0}, \mathbf{Q}^{-1})$. Show that $$\mathrm{E}(x_i|\boldsymbol{x}_{-i}) = \sum_{j \neq i} -\frac{Q_{ij}}{Q_{ii}}x_j.$$
-
-    *Hint: You may use the fact that $x_{i} | \boldsymbol{x}_{-i}$ is normally distributed with density function proportional to the density function of $\boldsymbol{x}$*.
+(@) [6 pts]
 
     (Option 2) Ch. 7.9 Exercise 12. (a) from Zimmerman and Ver Hoef:
 
@@ -29,13 +25,114 @@ knitr::opts_chunk$set(class.source = 'number-lines', cache = T,
     
     *(a) SAR models with $\mathbf{W}$ a binary adjacency matrix and $-1\leq \rho_\mathrm{SAR} \leq 1$*
 
+```{r, echo = T}
+# Make grids:
+
+library(sf)
+library(spdep)
+
+points3 <- st_as_sf(data.frame(x = c(1, 2, 3, 4),
+                             y = c(1, 2, 3, 4)),
+                  coords = c("x", "y"))
+grid3 <- st_make_grid(points3, cellsize = 1)
+
+points6 <- st_as_sf(data.frame(x = c(1, 2, 3, 4, 5, 6, 7),
+                             y = c(1, 2, 3, 4, 5, 6, 7)),
+                  coords = c("x", "y"))
+grid6 <- st_make_grid(points6, cellsize = 1)
+
+sig <-  1 # set variance
+
+library(dplyr)
+library(ggplot2)
+
+# Compute weight matrices:
+
+w3 <- st_intersects(grid3, remove_self = T, sparse = F)*1
+w6 <- st_intersects(grid6, remove_self = T, sparse = F)*1
+
+rho <- seq(from = -0.99, to = 0.99, by = 0.05)
+
+```
+
+```{r, echo = T}
+# for 3x3 grid:
+n3 <- length(grid3)
+# w3_s <- w3/rowSums(w3)
+
+cor_data3 <- data.frame()
+for(k in 1:length(rho)){
+  inv_IminusB <- solve(diag(n3) - (rho[k]*w3))
+  sigma3 <- sig*(inv_IminusB %*% t(inv_IminusB))
+  cor3 <- cov2cor(sigma3)
+  
+      for(i in 1:n3){ 
+        for(j in (i+1):n3){
+          if (j <= n3){
+                  cor_data3 <- rbind(cor_data3, data.frame(
+                      rho = rho[k],
+                      site1 = i,
+                      site2 = j,
+                      corr = cor3[i, j]))
+                    }
+              }
+       }
+}
+
+cor_data3 <- cor_data3 %>% 
+  filter(site1 != site2) %>% 
+  mutate(site_pair = paste(site1, "-", site2))
+
+ggplot(cor_data3, aes(x = rho, y = corr))+
+  geom_line(aes(group = site_pair), alpha = 0.1)+
+  ggtitle("3x3 grid")+
+  theme_light()
+  
+```
+
+```{r, echo = T}
+# for 6x6 grid:
+n6 <- length(grid6)
+# w6_s <- w6/rowSums(w6)
+
+cor_data6 <- data.frame()
+for(k in 1:length(rho)){
+  inv_IminusB <- solve(diag(n6) - (rho[k]*w6))
+  sigma6 <- sig*(inv_IminusB %*% t(inv_IminusB))
+  cor6 <- cov2cor(sigma6)
+  
+      for(i in 1:n6){ 
+        for(j in (i+1):n6){
+          if (j <= n6){
+                  cor_data6 <- rbind(cor_data6, data.frame(
+                      rho = rho[k],
+                      site1 = i,
+                      site2 = j,
+                      corr = cor6[i, j]))
+                    }
+              }
+       }
+}
+
+cor_data6 <- cor_data6 %>% 
+  filter(site1 != site2) %>% 
+  mutate(site_pair = paste(site1, "-", site2))
+
+ggplot(cor_data6, aes(x = rho, y = corr))+
+  geom_line(aes(group = site_pair), alpha = 0.1)+
+  ggtitle("6x6 grid")+
+  theme_light()
+
+```
+For both sets of grids using non-standardized adjacency matrices, all site pairs have marginal correlations of zero at rho = 0. However, there does not seem to be a consistent pattern in marginal correlations tending to decrease or increase as rho > 0. For the 3x3 grid, marginal correlations are > 0 when 0 < rho < approx. 0.2, and for the 6x6 grid, marginal correlations are > 0 when 0 < rho < approx 0.1. This is admittedly not intuitive to me (how can positive spatial dependence lead to negative marginal correlations?) so I'm hoping I coded this right. When I row standardize the adjacency matrices, which I tend to interpret as dependency getting spread across neighbors, the plots look more reasonable.
+
 ### I. Exploring the data [17 pts]
 
 For this homework, you'll be analyzing data related to cyclist injuries in San Diego County. The County reports counts of cyclist injuries for "subregional areal" (SRA) units. SRAs are defined by The County for their own use. Roughly, each areal unit is made up of a union of several census tracts (Figure 1; SEE PDF ON GRADESCOPE). The shapefiles for this assignment were obtained [**here**](https://geo.sandag.org/portal/home/item.html?id=bf4a734115bc46d29f146f2b51107f2f) (the [**San Diego Regional Data Warehouse**](https://geo.sandag.org/portal/apps/experiencebuilder/experience/?id=fad9e9c038c84f799b5378e4cc3ed068&page=About#data_s=id%3AdataSource_1-0%3A112) has several other publicly available spatial datasets). Download the file `Subregional_Areas_2020_shapefile.zip` from D2L and unzip it in your working directory.
 
 (@) [2 pts] **Provide executable code** (**PEC**) that uses the `sf` package to read the shapefiles in the `Subregional_Areas_2020_shapefile/` directory into R as a simple features object called `SRA`. How many SRAs are there? Verify your `SRA` boundaries look like the ones in Figure 1 (SEE PDF ON GRADESCOPE).
 
-```{r}
+```{r, echo = T}
 library(sf)
 SRA <- st_read("Subregional_Areas_2020.shp") %>% 
   st_as_sf()
@@ -47,7 +144,7 @@ There are 41 subregional areas.
 
 (@) [1 pt] Use the `spdep` package to create a `nb` object that defines neighbors based on adjacency. **PEC**. What is the most neighbors any areal unit has? Fewest?
 
-```{r}
+```{r, echo=T}
 library(spdep)
 
 nbrs <- poly2nb(SRA)
@@ -66,7 +163,7 @@ The largest number of neighbors for a single unit is 8, and the fewest is 2.
 
 I've decided to designate SRAs as neighbors if they are within 10 km of each other.
 
-```{r}
+```{r, echo = T}
 nbrs2 <- st_is_within_distance(SRA, SRA, dist = 10000)
 
 x <- vector(length = 41)
@@ -77,7 +174,7 @@ max(x)
 min(x)
 ```
 
-```{r}
+```{r, echo = T}
 sra_buff <- st_buffer(SRA, dist = 10000)
 
 # just kinda seeing what this looks like...
@@ -101,7 +198,7 @@ The variable `OUTCOME` corresponds to one of six outcomes for the cyclist (you w
 
 (@) [2 pts] How many total deaths occurred? How many total hospitalizations? How many total emergency room discharges?
 
-```{r}
+```{r, echo = T}
 library(dplyr)
 
 bikes_lower <- bikes %>% 
@@ -142,7 +239,7 @@ One potentially relevant variable that could help explain the number of vehicle-
 
 (@) [2 pts] **PEC** that: (i) reads the bike route shapefiles into R as a simple features object called `routes_sf` and (ii) verifies that the CRS for `routes_sf` matches the one used for the SRAs.
 
-```{r}
+```{r, echo = T}
 routes_sf <- st_read("BIKE_ROUTES.shp") %>% 
   st_as_sf()
 
@@ -150,14 +247,10 @@ st_crs(routes_sf) == st_crs(SRA)
 ```
 
 (@) [4 pts] **PEC** to make a plot similar to Figure 2 (SEE PDF ON GRADESCOPE). Make sure your map shows the SRAs of San Diego colored according to `TotalRateInjury` and the bicycle routes (hint: you may want to use the `plot()` function twice; once with `reset = FALSE`, and once with `add = TRUE`). Include your map in your submission.
-```{r}
+
+```{r, echo = T}
 library(RColorBrewer)
-# SRA <- st_as_sf(SRA)
-```
 
-
-```{r}
-# plot.new()
 breaks <- c(0, 10, 20, 30, 40, 50, 60, 70)
   
 plot.new()
@@ -187,14 +280,15 @@ Line 5 sets the length equal to zero for SRAs with null values resulting in a la
 
 (@) [4 pts] **PEC** that fits a traditional linear model for `TotalRateInjury` as function of the miles of bicycle routes in the SRA assuming independent residuals. Give a 95\% confidence interval for the effect of miles of bicycles routes. Make a map of the SRAs colored according to the residuals from the linear model. Use a diverging color scheme centered at 0 (hint: you may need to set the `breaks` argument in `plot()`).
 
-```{r}
+```{r, echo = T}
+library(spmodel)
 linmod <- splm(TotalRateInjury ~ length, data = SRA, spcov_type = "none")
 confint(linmod)
 ```
 
 For every additional mile of bicycle routes, there were an additional 0.14 - 0.39 deaths per 100,000 people.
 
-```{r}
+```{r, echo = T}
 SRA$linear_res <- residuals(linmod)
 plot(SRA['linear_res'], 
      pal = brewer.pal(n = 8, name = "RdYlBu"),
@@ -203,7 +297,7 @@ plot(SRA['linear_res'],
 
 (@) [6 pts] **PEC** that fits the same linear model while accounting for residual spatial dependence using a CAR model based on the adjacency network from question (2). Compare the models with and without spatial dependence using AIC and leave-one-out cross-validation. Is there evidence in favor of including the "small" scale spatial effect?
 
-```{r}
+```{r, echo = T}
 nbrs1 <- st_intersects(SRA, remove_self = T)
 
 carmod <- spautor(TotalRateInjury ~ length, data = SRA, 
@@ -215,7 +309,7 @@ AIC(linmod, carmod)
 There is some evidence that the CAR model performed better. Compared to the linear model, the AIC and prediction error are lower and the "R2"(ish) is higher.
 
 (@) [3 pts] Give a 95\% confidence interval for the effect of miles of bicycle routes based on the CAR model from (10). How does it compare to the interval you found using the linear model *without* accounting for residual spatial dependence?
-```{r}
+```{r, echo = T}
 confint(carmod)
 ```
 
@@ -223,9 +317,13 @@ CAR modeling estimates that for each additional bike route mile, there are 0.06 
 
 (@) [4 pts] Fit another linear model with spatial dependence (could be another CAR model, but need not be) based on your alternative neighborhood structure from question (3). Compare the two model fits using a predictive score of your choice. Point out differences/similarities you notice in both the "large" and "small" scale effects.
 
-```{r}
+```{r, echo = T}
 carmod2 <- spautor(TotalRateInjury ~ length, data = SRA, 
                   spcov_type = "car", W = as.matrix(nbrs2))
 
 rbind(loocv(carmod), loocv(carmod2))
+AIC(carmod, carmod2)
+summary(carmod);summary(carmod2)
 ```
+My alternative neighborhood structure made little difference in the predictive power of the model (AIC). My inclusion of extra neighbors led to a decreased estimate of the effect of length, however much less variance was explained compared to the original neighborhood structure (R2). Including more neighbors increased the spatial dependence and range parameters, confirming that this structure implies more vast spatial dependence.
+
