@@ -27,6 +27,15 @@ Make sure all solutions are clearly labeled, and **please utilize the question p
 \caption{Intensity surface for question 1.}
 \end{figure}
 
+```{r}
+lambda <- function(r){
+  10 * exp(-(r^2)/4)
+}
+
+integrate(lambda, lower = 0, upper = 1)
+```
+
+
 ### II. Exploration [17 pts]
 
 For this lab, you will investigate a possible connection between earthquakes and oil & gas drilling in Kansas.
@@ -35,6 +44,7 @@ For this lab, you will investigate a possible connection between earthquakes and
 ```{r}
 library(tigris)
 library(tidyverse)
+library(spatstat)
 
 kansas_sf <- states() %>% 
   filter(NAME == "Kansas")
@@ -92,8 +102,7 @@ wells_sf <- st_as_sf(wells,
                      coords = c("LONGITUDE", "LATITUDE"), 
                            crs = "+proj=longlat")
 ```
-
-2012 had the most wells completed, with a total of 6,027 wells.
+The most recent well was completed in September 2024. 2012 had the most wells completed, with a total of 6,027 wells.
 
 (@) [2 pts] Make new versions of `kansas_sf`, `earthquakes_sf`, and `wells_sf` called `kansas_utm`, and `earthquakes_utm`, `wells_utm` that are projected to the Universal Transverse Mercator coordinate system, zone 13. **PEC**. Compare the bounding box for `kansas_utm` and the first few coordinate values in `earthquakes_utm` and `wells_utm` to the ones below to make sure you've transformed correctly (you might also want to try plotting all three objects on the same map).
 ```{r}
@@ -148,7 +157,7 @@ Based on our empirical G(r) and F(r) estimates, it would appear that our data ar
 eq_k <- Kest(earthquakes_ppp)
 plot(eq_k)
 ```
-Our empirical K function shows that there are more points within small radii around earthquakes than expected from a CSR process, further confirming that our earthquake points did not arise from a HPP.
+Our empirical K function shows that there are more points within small radii around earthquakes than expected from a CSR process, indicating clustering of points and further confirming that our earthquake points did not arise from a HPP.
 
 ### II. Models for earthquakes [18 pts]
 
@@ -165,7 +174,7 @@ wells_ppp <- wells_utm %>%
 
 (@) [3 pts]  Explain in your own words what the function `min_dist()` created in line 20 does. What value would `min_dist(wells_ppp[1])` return? Why?
 
-```{r, eval = F, attr.source='.numberLines startFrom="20"'}
+```{r, attr.source='.numberLines startFrom="20"'}
 min_dist <- distfun(X = wells_ppp)
 ```
 
@@ -182,13 +191,28 @@ The effect of minimum distance to a well on the log intensity is negative, such 
 
 (@) [3 pts] Create simulation-based envelopes for the $G(r)$ and $F(r)$ functions implied by your fitted IPP from question (12) and compare them to the corresponding empirical functions for the observed point pattern in `earthquakes_ppp`. What do your figures suggest about the quality of the model fit? 
 ```{r}
-g_mod1 <- envelope(well_mod1, fun = Gest)
+g_mod1 <- envelope(well_mod1, fun = Gest, global = T)
 plot(g_mod1)
-f_mod1 <- envelope(well_mod1, fun = Fest)
+f_mod1 <- envelope(well_mod1, fun = Fest, global = T)
 plot(f_mod1)
 ```
+These figures suggest that our fitted model predicts fewer close neighbors than were observed in the data, and that our model is overestimating the amount of proximate empty spaces. Our model is still probably underestimating the spatial clustering of these earthquakes.
 
 
 (@) [3 pts] Fit a log-Gaussian Cox Process (LGCP) model to the earthquake point pattern with the same single predictor and an exponential covariance function. Report a 95% confidence interval for the effect of `min_dist`. How does your interval compare to the one from question (12)?
+```{r}
+well_mod2 <- kppm(eq ~ min_dist, clusters = "LGCP", model = "exponential")
+summary(well_mod2)
+```
+Here, our confidence interval contains zero, indicating that there was no evidence for an effect of minimum distance after accounting for spatial dependence in the LGCP model.
 
 (@) [3 pts] Create simulation-based envelopes for the $G(r)$ and $F(r)$ functions implied by your fitted LGCP from question (14) and compare them to the corresponding empirical functions for the observed point pattern in `earthquakes_ppp`. What do your figures suggest about the quality of the model fit? 
+
+```{r}
+g_mod2 <- envelope(well_mod2, fun = Gest, global = T)
+plot(g_mod2)
+f_mod2 <- envelope(well_mod2, fun = Fest, global = T)
+plot(f_mod2)
+```
+g global fit is fine
+f global fit is not
