@@ -32,7 +32,10 @@ lambda <- function(r){
   10 * exp(-(r^2)/4)
 }
 
-integrate(lambda, lower = 0, upper = 1)
+l_int <- integrate(lambda, lower = 0, upper = 1) 
+
+#multiplying by 2pi is the same as integrating over theta from 0-2pi
+l_int$value*2*pi # ~ 58 points in the circle
 ```
 
 
@@ -150,7 +153,7 @@ plot(eq_g)
 eq_f <- Fest(earthquakes_ppp)
 plot(eq_f)
 ```
-Based on our empirical G(r) and F(r) estimates, it would appear that our data are not arising from a HPP. G(r) shows that our points are more clustered than expected, and F(r) shows that there are more empty spaces than expected from a HPP.
+Based on our empirical G(r) and F(r) estimates, it would appear that our data are not arising from a HPP. G(r) shows that our points are more clustered than expected, and F(r) shows that there are fewer small empty spaces, also indicating clustering.
 
 (@) [2 pts] Compute the empirical $K(r)$ function for the collection of all earthquake locations. How does it compare to the theoretical function for a completely spatially random (CSR) process?
 ```{r}
@@ -196,7 +199,7 @@ plot(g_mod1)
 f_mod1 <- envelope(well_mod1, fun = Fest, global = T)
 plot(f_mod1)
 ```
-These figures suggest that our fitted model predicts fewer close neighbors than were observed in the data, and that our model is overestimating the amount of proximate empty spaces. Our model is still probably underestimating the spatial clustering of these earthquakes.
+These figures suggest that our fitted model predicts fewer close neighbors than were observed in the data, and that our model is overestimating the amount of empty spaces. Our model is still probably underestimating the spatial clustering of these earthquakes.
 
 
 (@) [3 pts] Fit a log-Gaussian Cox Process (LGCP) model to the earthquake point pattern with the same single predictor and an exponential covariance function. Report a 95% confidence interval for the effect of `min_dist`. How does your interval compare to the one from question (12)?
@@ -204,7 +207,7 @@ These figures suggest that our fitted model predicts fewer close neighbors than 
 well_mod2 <- kppm(eq ~ min_dist, clusters = "LGCP", model = "exponential")
 summary(well_mod2)
 ```
-Here, our confidence interval contains zero, indicating that there was no evidence for an effect of minimum distance after accounting for spatial dependence in the LGCP model.
+Here, our confidence interval overlaps with zero, indicating that there was no evidence for an effect of minimum distance after accounting for spatial dependence in the LGCP model.
 
 (@) [3 pts] Create simulation-based envelopes for the $G(r)$ and $F(r)$ functions implied by your fitted LGCP from question (14) and compare them to the corresponding empirical functions for the observed point pattern in `earthquakes_ppp`. What do your figures suggest about the quality of the model fit? 
 
@@ -214,5 +217,5 @@ plot(g_mod2)
 f_mod2 <- envelope(well_mod2, fun = Fest, global = T)
 plot(f_mod2)
 ```
-g global fit is fine
-f global fit is not
+
+These figures show that our new LGCP model more accurately captures the density of neighbors in the observations. This model is still not performing well in estimating empty spaces, predicting more small empty spaces than expected from a Poisson process.
