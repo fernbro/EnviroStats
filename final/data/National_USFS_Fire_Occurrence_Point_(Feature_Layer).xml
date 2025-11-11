@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?><metadata>
+    <idinfo>
+        <citation>
+            <citeinfo>
+                <title>National USFS Fire Occurrence Point (Feature Layer)</title>
+                <onlink>https://apps.fs.usda.gov/arcx/rest/services/EDW/EDW_FireOccurrenceAndPerimeter_01/MapServer/9</onlink>
+            </citeinfo>
+        </citation>
+        <descript>
+            <abstract>The FireOccurrence point layer represents ignition points, or points of origin, from which individual USFS wildland fires started. Data are maintained at the Forest/District level, or their equivalent, to track the occurrence and the origin of individual USFS wildland fires. Forests are working to include historical data, which may be incomplete.National USFS fire occurrence locations where wildland fires have historically occurred on National Forest System Lands and/or where protection is the responsibility of the US Forest Service. Knowing where wildland fire events have happened in the past is critical to land management efforts in the future.This data is utilized by fire &amp;amp; aviation staffs, land managers, land planners, and resource specialists on and around National Forest System Lands. The attributes included within the FireOccurrence point layer are needed to meet the needs of the US Forest Service, for data exchange between interagency data systems, to relate to the FirePerimeter polygon data layer and various fire data systems, and to track the locations of wildland fires.*This data has been updated to match 2021 National GIS Data Dictionary Standards.Metadata and Downloads</abstract>
+            <purpose>National USFS FireOccurrence Point locations</purpose>
+        </descript>
+        <keywords>
+            <theme>
+                <themekt>None</themekt>
+                <themekey>geospatial</themekey>
+            </theme>
+        </keywords>
+        <accconst>None</accconst>
+        <useconst>The USDA Forest Service makes no warranty, expressed or implied, including the warranties of merchantability and fitness for a particular purpose, nor assumes any legal liability or responsibility for the accuracy, reliability, completeness or utility of these geospatial data, or for the improper or incorrect use of these geospatial data. These geospatial data and related maps or graphics are not legal documents and are not intended to be used as such. The data and maps may not be used to determine title, ownership, legal descriptions or boundaries, legal jurisdiction, or restrictions that may be in place on either public or private land. Natural hazards may or may not be depicted on the data and maps, and users should exercise due caution. The data are dynamic and may change over time. The user is responsible to verify the limitations of the geospatial data and to use the data accordingly. Additionally, The U.S. Forest Service waives copyright and related rights in the work worldwide through the CC0 1.0 Universal Public Domain Dedication (which can be found at https://creativecommons.org/publicdomain/zero/1.0/).</useconst>
+        <datacred>USDA Forest Service National Forest System Lands GIS and Fire personnel</datacred>
+    </idinfo>
+    <metainfo>
+        <metd>20200429</metd>
+        <metc>
+            <cntinfo>
+                <!--no contact person or organization name available-->
+            </cntinfo>
+        </metc>
+        <metstdn>FGDC Content Standard for Digital Geospatial Metadata</metstdn>
+        <metstdv>FGDC-STD-001-1998</metstdv>
+        <mettc>local time</mettc>
+    </metainfo>
+</metadata>
