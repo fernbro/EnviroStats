@@ -1,0 +1,135 @@
+---
+title: 'HW6: Spatio-temporal data'
+author: "Fern Bromley"
+date: "December 5th, 2025"
+output:
+  pdf_document
+header-includes:
+- \renewcommand*\familydefault{\sfdefault} %% this picks a sans serif font
+- \usepackage[T1]{fontenc}
+---
+
+```{r setup, echo=F}
+knitr::opts_chunk$set(cache = T)
+```
+
+## Los Angeles Bikeshare
+
+For this lab, you will study an expanded version of the bikeshare data we saw in class. Instead of looking at a single day, we'll look at a whole week broken up into two-hour intervals. 
+
+## I. Exploring the data [26 pts]
+
+(@) [6 pts] First load the `spacetime` and `sp` packages and then load the `departures_STFDF` object stored in `bike_share_HW6.RData`. What is the maximum number of bikes that departed a single station in any single two-hour window during the week of January 5-11, 2020? Where is the station at which this occurred? On what date and during which time interval did the maximum occur? (*Hint*: the spatial, temporal, and covariate information inside `departure_STFDF` can be accessed using `@sp`, `@time`, and `@data`, respectively.)
+
+```{r}
+# install.packages("spacetime")
+library(spacetime)
+# install.packages("sp")
+library(sp)
+library(tidyverse)
+
+load('bike_share_HW6.RData')
+
+
+max(departures_STFDF@data$count)
+departures_STFDF@data$station_id[which(departures_STFDF@data$count==max(departures_STFDF@data$count))]
+station <- subset(departures_STFDF@data, departures_STFDF@data$station_id == 3030) %>% 
+  arrange(-count) # sort by count, descending
+```
+
+At station 3030, 37 bikes were checked out at 4pm on Friday (Jan 10th). This was the most bikes checked out in any hour of the week at all stations.
+
+(@) [4 pts] What are the coordinates for the three stations that had the largest total number of departures over the one week period? How many total departures did each one have?
+
+```{r}
+weekly_totals <- departures_STFDF@data %>% 
+  group_by(station_id) %>% 
+  summarise(departures = sum(count))
+```
+
+Stations 3030, 3005, and 3014 had the most total departures that week, with 361, 283, and 219 departures respectively.
+
+(@) [4 pts] Overlay all 187 bikeshare locations on a map of Los Angeles and mark the three locations you found in question 3. Include your map in your submission.
+
+```{r}
+library(ggmap)
+library(sf)
+st_bbox(departures_STFDF@sp)
+stations <- departures_STFDF@sp@coords
+busy_stations <- subset(departures_STFDF, departures_STFDF@data$station_id %in% c(3030, 3005, 3014))@sp@coords
+
+la_map <- get_stadiamap(bbox = c(left = -118.5, right = -118.22,
+                                 bottom = 33.97024, top = 34.19),
+                        zoom = 12)
+
+ggmap(la_map)+
+  geom_point(data = stations, aes(x = lon, y = lat), color = "blue", pch = 1)+
+  geom_point(data = busy_stations, aes(x = lon, y = lat), color = "orange")
+```
+
+(@) [4 pts] What is the name of the major train station near these busy bikeshare stations? What is one other feature in the area that you think people might decide to bike to/from?
+
+LA's Union Station is located near these bike stations. Government and municipal services like City Hall and court buildings are also nearby.
+
+
+(@) [4 pts] Add a new column to the `data` in `departures_STFDF` called `weekend` that has a value of `TRUE` for time intervals that fall on a Saturday or Sunday, and `FALSE` otherwise. Double check that you have $2 \times 12 \times 187 = 4488$ `TRUE` values and $11220$ `FALSE` values.
+
+```{r}
+departures_STFDF@data$weekend <- case_when(departures_STFDF@data$DoW == "Sat" ~ T,
+                                           departures_STFDF@data$DoW == "Sun" ~ T,
+                                           .default = F)
+
+length(subset(departures_STFDF, departures_STFDF@data$DoW %in% c("Sat", "Sun"))) # i get 5040 trues, not 4488.
+```
+
+
+(@) [4 pts] Do you expect the number of departures on the weekend to be higher or lower than the number during the week? Why?
+
+I expect them to be higher during the weekend, since I assume most people commute by car and use the bikes for leisure/more casual trips.
+
+
+## II. A spatio-temporal model for counts [14 pts]
+
+(@) [4 pt] Create a new `STFDF` object called `departures_STFDF_proj` that projects the coordinates using zone 11 of the Universal Transverse Mercator coordinate system. Rename the coordinates `x` and `y` instead of `lon` and `lat`. SEE PDF ON GRADESCOPE. Provide executable code (**PEC**; hint: you'll need to use the projection function from the `sp` package, not `sf`).
+
+```{r}
+#spTransform?
+
+new_sp <- spTransform(departures_STFDF@sp, "epsg:32611")
+coordnames(new_sp) <- c("x", "y")
+departures_STFDF_proj <- STFDF(sp = new_sp, time = departures_STFDF@time, data = departures_STFDF@data)
+```
+
+(@) [6 pts] Use the `mgcv` package to fit a GAM for a Poisson response with log link function in which `weekend` is a fixed effect. Model the spatio-temporal random effect using flexible basis functions of your choice over space and hour of the day. Make sure you use the projected spatial coordinates. **PEC**.
+
+```{r}
+library(mgcv)
+
+gam1 <- gam(count ~ s(x, y) + s(timeIndex) + weekend, family = poisson, data = departures_STFDF_proj)
+```
+
+(@) [4 pts] What is the point estimate for the effect of weekend? Does it agree with your expectations?
+
+```{r}
+summary(gam1)
+```
+
+
+
+## III. OPTIONAL: Two more spatio-temporal models for counts
+
+For those interested and with extra time on their hands (which I realize may be no one, but just in case), here are a few extra questions to stretch your GAM skills a bit further.
+
+(@) Use your fitted model to predict the number of departures from each location and time interval. What is the mean predicted number of departures? What is the maximum predicted number of departures?
+
+(@) Overlay the predicted number of departures for each station between 4:00--6:00pm on January 10, 2020 on a map of Los Angeles using an appropriate color scale. 
+
+By definition, the mean and variance of Poisson random variables are equal. Two alternatives are the **zero-inflated Poisson** distribution and the **negative binomial** distribution. The zero-inflated Poisson distribution is useful when the data contain more zeros than we would expect for a conditionally Poisson random variable. The negative binomial distribution is often used when the mean and variance for the response distribution are not equal, which is sometimes called over- or under-dispersion. Diagnostics to check for zero-inflation and over-/under-dispersion can be difficult to produce, so one way to "check" for these characteristics is to fit models that accommodate them and see if they outperform simpler alternatives.
+
+Consider the following models and pick the one that best predicts the values in a test set of locations and times. Let the test set be the number of departures from each station on each day between 4:00--6:00pm. The training set is be everything else. 
+
+(@) Fit the Poisson model to all data except those for 4:00--6:00pm on each day (hint: use the `[, timeIndex]` sub-setting method on `departures_STFDF_proj[, ]`). Use your fitted model to predict the numbers of departures for the test set. Compute the mean squared error between the predicted values and the observed departure counts. 
+
+(@) Fit two new models to the training set with the same linear effects but utilizing the **zero-inflated Poisson** and **negative binomial** distributions. Make predictions for the test set and compute the mean squared error for each. 
+
+(@) Which of your three models has the smallest mean squared error? Is this what you expected?

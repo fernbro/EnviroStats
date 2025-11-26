@@ -194,17 +194,27 @@ ggplot()+
 # join the community data with just the plot and geometry columns from that shapefile, since it has a bunch of info i don't care about
 com_sf <- inner_join(com_data, plot_xy)
 
+esv_test <- spmodel::esv(MUWR~severity, com_sf)
+
 # let's look at a multivariate empirical variogram..
 
 # just need the x, y locations of the sample locations
 plot_loc <- st_zm(com_sf$geometry, drop = T) %>% 
-  st_coordinates()
+  st_coordinates() %>% 
+  data.frame()
 
 # first we'll remove any linear effect of fire severity
 # and order the factors too..
 
 com_data$severity <- factor(com_data$severity, levels = c("U", "L", "H"))
-com_resid <- residuals(lm(com_mat ~ com_data$severity))
+com_resid <- data.frame(residuals(lm(com_mat ~ com_data$severity)))
+
+
+com_resid$xcoord <-  plot_loc$X ; com_resid$ycoord <-  plot_loc$Y
+com_resid$severity <- com_data$severity
+
+esv_test <- esv(MUST~severity, data = com_resid, xcoord = "xcoord")
+esv_test <- esv(PSMA~severity, data = com_resid, xcoord = "xcoord", bins = 10) ; plot(esv_test)
 
 # using permutations, we can test the significance of Moran's I using our different (univariate and multivariate) community composition metrics
 
@@ -219,6 +229,7 @@ morI_multi <- moran.randtest(com_mat, plotw, alter = "two-sided")
 morI_multi # separately tests every variable in the community
 morI_multi_np <- moranNP.randtest(com_mat, plotw, alter = "two-sided") # separately tests positive & negitive eigenvectors
 morI_multi_np
+summary(morI_multi_np)
 
 # other exploration:
 
@@ -227,6 +238,10 @@ morI_multi_np
 varg <- variogmultiv(com_resid, plot_loc, nclass = 20)
 # the multivariate variogram is equal to the sum of univariate variograms for all the variables
 plot(varg$d, varg$var, pch = 20)
+
+
+
+
 
 # varg$d is the centers of distance classes, 
 # varg$var is the empirical semivariance
@@ -237,7 +252,7 @@ com_nmds_sf <- inner_join(com_nmds, com_sf) %>%
   st_as_sf()
 
 # univariate ESV with NMDS scores:
-esv1 <- esv(NMDS1 ~ severity, data = com_nmds_sf, bins = 20)
+esv1 <- esv(NMDS1 ~ severity, data = com_nmds_sf, bins = 20) 
 esv2 <- esv(NMDS2 ~ severity, data = com_nmds_sf, bins = 20)
 plot(esv1)
 plot(esv2)
