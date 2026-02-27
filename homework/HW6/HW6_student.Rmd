@@ -15,7 +15,7 @@ knitr::opts_chunk$set(cache = T)
 
 ## Los Angeles Bikeshare
 
-For this lab, you will study an expanded version of the bikeshare data we saw in class. Instead of looking at a single day, we'll look at a whole week broken up into two-hour intervals. 
+For this lab, you will study an expanded version of the bikeshare data we saw in class. Instead of looking at a single day, we'll look at a whole week broken up into two-hour intervals.
 
 ## I. Exploring the data [26 pts]
 
@@ -37,7 +37,7 @@ station <- subset(departures_STFDF@data, departures_STFDF@data$station_id == 303
   arrange(-count) # sort by count, descending
 ```
 
-At station 3030, 37 bikes were checked out at 4pm on Friday (Jan 10th). This was the most bikes checked out in any hour of the week at all stations.
+At station 3030 in the downtown area, 37 bikes were checked out at 4pm on Friday (Jan 10th). This was the most bikes checked out in any hour of the week at all stations.
 
 (@) [4 pts] What are the coordinates for the three stations that had the largest total number of departures over the one week period? How many total departures did each one have?
 
@@ -54,17 +54,20 @@ Stations 3030, 3005, and 3014 had the most total departures that week, with 361,
 ```{r}
 library(ggmap)
 library(sf)
-st_bbox(departures_STFDF@sp)
-stations <- departures_STFDF@sp@coords
-busy_stations <- subset(departures_STFDF, departures_STFDF@data$station_id %in% c(3030, 3005, 3014))@sp@coords
 
+stations <- departures_STFDF@sp@coords
+busy_stations <- subset(departures_STFDF, 
+                        departures_STFDF@data$station_id %in% c(3030, 3005, 3014))@sp@coords
+
+# st_bbox(departures_STFDF@sp)
 la_map <- get_stadiamap(bbox = c(left = -118.5, right = -118.22,
-                                 bottom = 33.97024, top = 34.19),
+                                 bottom = 33.95, top = 34.19),
                         zoom = 12)
 
 ggmap(la_map)+
-  geom_point(data = stations, aes(x = lon, y = lat), color = "blue", pch = 1)+
+  geom_point(data = stations, aes(x = lon, y = lat), color = "blue", shape = 1)+
   geom_point(data = busy_stations, aes(x = lon, y = lat), color = "orange")
+
 ```
 
 (@) [4 pts] What is the name of the major train station near these busy bikeshare stations? What is one other feature in the area that you think people might decide to bike to/from?
@@ -79,9 +82,8 @@ departures_STFDF@data$weekend <- case_when(departures_STFDF@data$DoW == "Sat" ~ 
                                            departures_STFDF@data$DoW == "Sun" ~ T,
                                            .default = F)
 
-length(subset(departures_STFDF, departures_STFDF@data$DoW %in% c("Sat", "Sun"))) # i get 5040 trues, not 4488.
+length(subset(departures_STFDF, departures_STFDF@data$DoW %in% c("Sat", "Sun"))) # i get 5040 trues, not 4488...
 ```
-
 
 (@) [4 pts] Do you expect the number of departures on the weekend to be higher or lower than the number during the week? Why?
 
@@ -104,8 +106,7 @@ departures_STFDF_proj <- STFDF(sp = new_sp, time = departures_STFDF@time, data =
 
 ```{r}
 library(mgcv)
-
-gam1 <- gam(count ~ s(x, y) + s(timeIndex) + weekend, family = poisson, data = departures_STFDF_proj)
+gam1 <- gam(count ~ s(x, y) + s(hour) + weekend, family = poisson, data = departures_STFDF_proj)
 ```
 
 (@) [4 pts] What is the point estimate for the effect of weekend? Does it agree with your expectations?
@@ -114,22 +115,4 @@ gam1 <- gam(count ~ s(x, y) + s(timeIndex) + weekend, family = poisson, data = d
 summary(gam1)
 ```
 
-
-
-## III. OPTIONAL: Two more spatio-temporal models for counts
-
-For those interested and with extra time on their hands (which I realize may be no one, but just in case), here are a few extra questions to stretch your GAM skills a bit further.
-
-(@) Use your fitted model to predict the number of departures from each location and time interval. What is the mean predicted number of departures? What is the maximum predicted number of departures?
-
-(@) Overlay the predicted number of departures for each station between 4:00--6:00pm on January 10, 2020 on a map of Los Angeles using an appropriate color scale. 
-
-By definition, the mean and variance of Poisson random variables are equal. Two alternatives are the **zero-inflated Poisson** distribution and the **negative binomial** distribution. The zero-inflated Poisson distribution is useful when the data contain more zeros than we would expect for a conditionally Poisson random variable. The negative binomial distribution is often used when the mean and variance for the response distribution are not equal, which is sometimes called over- or under-dispersion. Diagnostics to check for zero-inflation and over-/under-dispersion can be difficult to produce, so one way to "check" for these characteristics is to fit models that accommodate them and see if they outperform simpler alternatives.
-
-Consider the following models and pick the one that best predicts the values in a test set of locations and times. Let the test set be the number of departures from each station on each day between 4:00--6:00pm. The training set is be everything else. 
-
-(@) Fit the Poisson model to all data except those for 4:00--6:00pm on each day (hint: use the `[, timeIndex]` sub-setting method on `departures_STFDF_proj[, ]`). Use your fitted model to predict the numbers of departures for the test set. Compute the mean squared error between the predicted values and the observed departure counts. 
-
-(@) Fit two new models to the training set with the same linear effects but utilizing the **zero-inflated Poisson** and **negative binomial** distributions. Make predictions for the test set and compute the mean squared error for each. 
-
-(@) Which of your three models has the smallest mean squared error? Is this what you expected?
+The estimate for the effect of weekends is positive, indicating that there were more generally bikes checked out during this weekend than compared to the week, which aligns with my prediction.
